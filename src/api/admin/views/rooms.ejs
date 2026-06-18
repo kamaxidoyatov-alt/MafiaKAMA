@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f1a; color: #e0e0e0; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { color: #ffd700; }
+        .nav { margin: 20px 0; }
+        .nav a { color: #888; text-decoration: none; padding: 8px 16px; border-radius: 8px; }
+        .nav a:hover { color: #ffd700; background: rgba(255, 215, 0, 0.1); }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #2a2a3a; }
+        th { color: #888; text-transform: uppercase; font-size: 12px; }
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+        .badge.waiting { background: rgba(96, 165, 250, 0.2); color: #60a5fa; }
+        .badge.playing { background: rgba(74, 222, 128, 0.2); color: #4ade80; }
+        .badge.public { background: rgba(255, 215, 0, 0.2); color: #ffd700; }
+        .badge.private { background: rgba(248, 113, 113, 0.2); color: #f87171; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="/admin">← Назад к дашборду</a>
+        </div>
+        <h1>🚪 Комнаты</h1>
+        <table>
+            <thead>
+                <tr>
+                    <th>Код</th>
+                    <th>Название</th>
+                    <th>Тип</th>
+                    <th>Статус</th>
+                    <th>Игроки</th>
+                    <th>Создатель</th>
+                </tr>
+            </thead>
+            <tbody>
+                <% (rooms || []).forEach(room => { %>
+                <tr>
+                    <td><%= room.code %></td>
+                    <td><%= room.name %></td>
+                    <td><span class="badge <%= room.type %>"><%= room.type === 'public' ? '🌐 Публичная' : '🔒 Приватная' %></span></td>
+                    <td><span class="badge <%= room.status %>"><%= room.status === 'waiting' ? 'Ожидание' : room.status === 'playing' ? 'Игра' : 'Завершена' %></span></td>
+                    <td><%= room.players.length %>/<%= room.maxPlayers %></td>
+                    <td><%= room.players[0]?.firstName || '?' %></td>
+                </tr>
+                <% }); %>
+                <% if (!rooms || rooms.length === 0) { %>
+                <tr><td colspan="6" style="text-align:center;color:#666;">Нет активных комнат</td></tr>
+                <% } %>
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>

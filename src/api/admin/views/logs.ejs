@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <style>
+        body { font-family: monospace; background: #0f0f1a; color: #e0e0e0; padding: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        h1 { color: #ffd700; font-family: -apple-system, sans-serif; }
+        .nav { margin: 20px 0; font-family: -apple-system, sans-serif; }
+        .nav a { color: #888; text-decoration: none; padding: 8px 16px; border-radius: 8px; }
+        .nav a:hover { color: #ffd700; }
+        .log { padding: 8px; border-bottom: 1px solid #1a1a2e; font-size: 13px; }
+        .log:hover { background: #1a1a2e; }
+        .time { color: #666; }
+        .event { color: #60a5fa; }
+        .msg { color: #ccc; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav"><a href="/admin">← Назад</a></div>
+        <h1>📝 Логи</h1>
+        <div>
+            <% (logs || []).forEach(log => { %>
+            <div class="log">
+                <span class="time">[<%= new Date(log.createdAt).toLocaleString('ru-RU') %>]</span>
+                <span class="event">[<%= log.eventType %>]</span>
+                <span class="msg"><%= log.message.substring(0, 200) %></span>
+            </div>
+            <% }); %>
+            <% if (!logs || logs.length === 0) { %>
+            <p style="color:#666;">Логов нет</p>
+            <% } %>
+        </div>
+    </div>
+</body>
+</html>

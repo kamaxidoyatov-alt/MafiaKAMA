@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  # === Основное приложение ===
+  app:
+    build: .
+    container_name: mafia-bot
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - BOT_TOKEN=${BOT_TOKEN}
+      - PORT=3000
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - REDIS_URL=redis://redis:6379
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY}
+      - ADMIN_EMAIL=admin@mafia-bot.com
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
+      - SESSION_SECRET=${SESSION_SECRET}
+      - JWT_SECRET=${JWT_SECRET}
+      - LOG_LEVEL=info
+    depends_on:
+      redis:
+        condition: service_started
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    networks:
+      - mafia-network
+
+  # === Redis (кэш) ===
+  redis:
+    image: redis:7-alpine
+    container_name: mafia-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - mafia-network
+
+volumes:
+  redis-data:
+
+networks:
+  mafia-network:
+    driver: bridge

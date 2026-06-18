@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f1a; color: #e0e0e0; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { color: #ffd700; }
+        .nav { margin: 20px 0; }
+        .nav a { color: #888; text-decoration: none; padding: 8px 16px; border-radius: 8px; }
+        .nav a:hover { color: #ffd700; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #2a2a3a; }
+        th { color: #888; text-transform: uppercase; font-size: 12px; }
+        .banned { color: #f87171; }
+        .admin { color: #ffd700; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav"><a href="/admin">← Назад</a></div>
+        <h1>👥 Игроки</h1>
+        <table>
+            <thead>
+                <tr><th>ID</th><th>Имя</th><th>Рейтинг</th><th>Игр</th><th>Побед</th><th>%</th><th>Статус</th></tr>
+            </thead>
+            <tbody>
+                <% (players || []).forEach(p => { %>
+                <tr>
+                    <td><%= p.telegramId %></td>
+                    <td><%= p.displayName %><% if (p.isAdmin) { %> 👑<% } %></td>
+                    <td><%= p.rating %></td>
+                    <td><%= p.stats.totalGames %></td>
+                    <td><%= p.stats.wins %></td>
+                    <td><%= p.winRate %>%</td>
+                    <td class="<%= p.isBanned ? 'banned' : '' %>"><%= p.isBanned ? '🔇 Забанен' : '✅ Активен' %></td>
+                </tr>
+                <% }); %>
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>
