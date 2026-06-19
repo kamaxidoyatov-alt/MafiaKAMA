@@ -354,6 +354,22 @@ const rooms = {
   },
 
   /**
+   * Найти ВСЕ комнаты в статусе waiting (для восстановления после перезапуска)
+   * @returns {Promise<Array>}
+   */
+  async findAllWaiting() {
+    const { data, error } = await getClient()
+      .from('rooms')
+      .select('*')
+      .eq('status', 'waiting');
+    if (error) {
+      logger.error(`Error finding all waiting rooms: ${error.message}`);
+      return [];
+    }
+    return (data || []).map(transformRoomFromDB);
+  },
+
+  /**
    * Проверить уникальность кода комнаты
    * @param {string} code
    * @returns {Promise<boolean>}
@@ -886,6 +902,10 @@ module.exports = {
     findPublicWaiting: withFallback(
       rooms.findPublicWaiting.bind(rooms),
       (limit) => memoryStore.rooms.findPublicWaiting(limit)
+    ),
+    findAllWaiting: withFallback(
+      rooms.findAllWaiting.bind(rooms),
+      () => memoryStore.rooms.findAllWaiting()
     ),
     findInactive: withFallback(
       rooms.findInactive.bind(rooms),

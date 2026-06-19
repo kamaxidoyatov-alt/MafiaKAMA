@@ -39,6 +39,7 @@ const config = {
 
   // Настройки игры
   game: {
+    starCost: parseInt(process.env.STAR_COST, 10) || 1,
     minPlayersToStart: parseInt(process.env.MIN_PLAYERS_TO_START, 10) || 4,
     maxPlayers: parseInt(process.env.MAX_PLAYERS, 10) || 16,
     dayDurationSeconds: parseInt(process.env.DAY_DURATION_SECONDS, 10) || 60,

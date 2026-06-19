@@ -214,6 +214,25 @@ const refreshRoom = async (code) => {
 };
 
 /**
+ * Восстанавливает комнаты из БД в activeRooms кэш (после перезапуска)
+ */
+const recoverRooms = async () => {
+  try {
+    const waitingRooms = await db.rooms.findAllWaiting();
+    let count = 0;
+    for (const room of waitingRooms) {
+      activeRooms.set(room.code, room);
+      count++;
+    }
+    logger.info(`Восстановлено ${count} активных комнат из БД`);
+    return count;
+  } catch (error) {
+    logger.error(`Ошибка восстановления комнат: ${error.message}`);
+    return 0;
+  }
+};
+
+/**
  * Очищает неактивные комнаты
  * Запускается по расписанию
  */
@@ -238,5 +257,6 @@ module.exports = {
   toggleReady,
   getPublicRooms,
   refreshRoom,
+  recoverRooms,
   cleanupInactiveRooms,
 };

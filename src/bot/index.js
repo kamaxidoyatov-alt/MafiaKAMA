@@ -55,6 +55,11 @@ const initBot = async () => {
   // Регистрируем команды
   setupCommands();
   setupCallbacks();
+  setupPaymentHandlers();
+
+  // Восстанавливаем активные комнаты из БД (после возможного перезапуска)
+  const { recoverRooms } = require('./game/room');
+  recoverRooms().catch(err => logger.error(`Ошибка восстановления комнат: ${err.message}`));
 
   // Устанавливаем команды меню
   await bot.setMyCommands([
@@ -121,6 +126,77 @@ const initBot = async () => {
 
   logger.info('Telegram бот запущен');
   return bot;
+};
+
+/**
+ * Настраивает обработку платежей через Telegram Stars
+ */
+const setupPaymentHandlers = () => {
+  // Автоподтверждение предварительного запроса на оплату
+  bot.on('pre_checkout_query', async (query) => {
+    try {
+      await bot.answerPreCheckoutQuery(query.id, true);
+      logger.debug(`pre_checkout_query одобрен: ${query.id}`);
+    } catch (error) {
+      logger.error(`Ошибка pre_checkout_query: ${error.message}`);
+    }
+  });
+
+  // Обработка успешного платежа — запуск игры после оплаты
+  bot.on('successful_payment', async (msg) => {
+    try {
+      const paymentInfo = msg.successful_payment;
+      const payload = JSON.parse(paymentInfo.invoice_payload);
+      const { roomCode, creatorId } = payload;
+
+      logger.info(`✅ Получен платёж ${paymentInfo.total_amount} ⭐ за игру в комнате ${roomCode} от ${msg.from.id}`);
+
+      // Запускаем игру
+      const result = await gameService.handleStartGame(roomCode, creatorId);
+
+      if (result.success) {
+        // Оповещаем всех игроков о старте игры
+        const { activeRooms } = require('./game/room');
+        const room = activeRooms.get(roomCode);
+        if (room) {
+          for (const p of room.players) {
+            if (p.chatId) {
+              try {
+                await bot.sendMessage(p.chatId,
+                  `🚀 <b>Игра начинается!</b>\n\nСпасибо за оплату! Проверьте свои роли!`,
+                  { parse_mode: 'HTML' }
+                );
+              } catch (e) { /* ignore */ }
+            }
+          }
+        }
+
+        // Отправляем подтверждение оплаты
+        await bot.sendMessage(msg.chat.id,
+          `✅ <b>Оплата получена!</b> Игра в комнате <code>${roomCode}</code> начинается! 🎭\n\n💰 С вас списано: ${paymentInfo.total_amount} ⭐`,
+          { parse_mode: 'HTML' }
+        );
+
+        logger.info(`Игра в комнате ${roomCode} запущена после оплаты ${paymentInfo.total_amount} ⭐`);
+      } else {
+        logger.error(`Ошибка старта игры после оплаты: ${result.message}`);
+        await bot.sendMessage(msg.chat.id,
+          `❌ Ошибка старта игры: ${result.message}\n\nОбратитесь к администратору для возврата звёзд.`,
+          { parse_mode: 'HTML' }
+        );
+      }
+    } catch (error) {
+      logger.error(`Ошибка обработки successful_payment: ${error.message}`);
+      try {
+        await bot.sendMessage(msg.chat.id,
+          '❌ Ошибка обработки платежа. Обратитесь к администратору.',
+          { parse_mode: 'HTML' }
+        );
+      } catch (e) { /* ignore */ }
+    }
+  });
+
+  logger.info('Обработчики платежей Telegram Stars настроены');
 };
 
 /**
@@ -398,7 +474,7 @@ const setupCallbacks = () => {
           break;
         }
 
-        // Старт игры
+        // Старт игры — отправляем инвойс на оплату 1 ⭐ через Telegram Stars
         case data === 'start_game': {
           const { activeRooms } = require('./game/room');
           let room = null;
@@ -438,24 +514,146 @@ const setupCallbacks = () => {
             break;
           }
           
-          const result = await gameService.handleStartGame(room.code, from.id);
-          
-          // Оповещаем всех игроков о старте игры
-          if (result.success) {
-            for (const p of room.players) {
-              if (p.chatId) {
-                try {
-                  await bot.sendMessage(p.chatId,
-                    `🚀 <b>Игра начинается!</b>\n\nПроверьте свои роли в лобби!`,
-                    { parse_mode: 'HTML' }
-                  );
-                } catch (e) { /* ignore */ }
-              }
+          // Отправляем инвойс на оплату 1 ⭐ через Telegram Stars
+          try {
+            await bot.sendInvoice(
+              msg.chat.id,
+              '🎭 Мафия — Начало игры',
+              `Оплатите ${config.game.starCost} ⭐, чтобы начать игру в комнате ${room.code}.\nПосле оплаты игра начнётся автоматически.`,
+              JSON.stringify({ roomCode: room.code, creatorId: from.id }),
+              '',  // provider_token — пустая строка для Telegram Stars
+              'start_game',
+              'XTR',  // Звёзды Telegram
+              [{ label: '🎭 Начало игры в Мафию', amount: config.game.starCost }]
+            );
+            await bot.answerCallbackQuery(query.id, {
+              text: `💰 Отправлен счёт на оплату ${config.game.starCost} ⭐`,
+              show_alert: true,
+            });
+          } catch (error) {
+            logger.error(`Ошибка отправки инвойса: ${error.message}`);
+            await bot.answerCallbackQuery(query.id, {
+              text: '❌ Ошибка отправки счёта. Попробуйте позже.',
+              show_alert: true,
+            });
+          }
+          break;
+        }
+
+        // Настройки комнаты
+        case data === 'room_settings': {
+          const { activeRooms } = require('./game/room');
+          let room = null;
+          for (const [code, r] of activeRooms) {
+            if (r.creatorId === from.id && r.status === 'waiting') {
+              room = r;
+              break;
             }
           }
-          
+          if (!room) {
+            await bot.answerCallbackQuery(query.id, { text: '❌ Комната не найдена', show_alert: true });
+            break;
+          }
+          const { roomSettingsMenu } = require('./keyboards');
+          await bot.editMessageReplyMarkup(
+            roomSettingsMenu(room).reply_markup,
+            { chat_id: msg.chat.id, message_id: msg.message_id }
+          );
+          await bot.answerCallbackQuery(query.id);
+          break;
+        }
+
+        // Назад в лобби из настроек
+        case data.startsWith('room_lobby_'): {
+          const lobbyCode = data.replace('room_lobby_', '');
+          const { findRoomByCode } = require('./game/room');
+          const room = await findRoomByCode(lobbyCode);
+          if (!room) {
+            await bot.answerCallbackQuery(query.id, { text: '❌ Комната не найдена', show_alert: true });
+            break;
+          }
+          const playerList = room.players.map((p, idx) =>
+            `${idx + 1}. <b>${escapeHtml(p.firstName)}</b>${p.telegramId === room.creatorId ? ' 👑' : ''}${p.isReady ? ' ✅' : ' ⏳'}`
+          ).join('\n');
+          let message = `🚪 <b>${escapeHtml(room.name)}</b> [<code>${room.code}</code>]\n\n`;
+          message += `👥 <b>${room.players.length}/${room.maxPlayers} игроков</b>\n`;
+          message += `🔒 ${room.type === 'public' ? '🌐 Публичная' : '🔒 Приватная'}\n\n`;
+          message += `<b>Игроки:</b>\n${playerList}`;
+          await bot.editMessageText(message, {
+            chat_id: msg.chat.id,
+            message_id: msg.message_id,
+            parse_mode: 'HTML',
+            ...require('./keyboards').roomLobbyMenu(room, from.id),
+          });
+          await bot.answerCallbackQuery(query.id);
+          break;
+        }
+
+        // Изменение настроек комнаты
+        case data.startsWith('settings_'):
+        case data === 'toggle_ranked': {
+          const { activeRooms } = require('./game/room');
+          const { roomSettingsMenu } = require('./keyboards');
+          let room = null;
+          let roomCode = null;
+          for (const [code, r] of activeRooms) {
+            if (r.creatorId === from.id && r.status === 'waiting') {
+              room = r;
+              roomCode = code;
+              break;
+            }
+          }
+          if (!room) {
+            await bot.answerCallbackQuery(query.id, { text: '❌ Комната не найдена', show_alert: true });
+            break;
+          }
+
+          const newSettings = { ...room.settings };
+          let newMaxPlayers = room.maxPlayers;
+          let changed = true;
+
+          switch (data) {
+            case 'settings_maxplayers':
+              // Цикл: 4 → 6 → 8 → 10 → 12 → 14 → 16 → 4
+              newMaxPlayers = [4, 6, 8, 10, 12, 14, 16][([4, 6, 8, 10, 12, 14, 16].indexOf(room.maxPlayers) + 1) % 7];
+              break;
+            case 'settings_day':
+              newSettings.dayDuration = [30, 45, 60, 90, 120, 180][([30, 45, 60, 90, 120, 180].indexOf(room.settings.dayDuration) + 1) % 6];
+              break;
+            case 'settings_night':
+              newSettings.nightDuration = [20, 30, 45, 60, 90][([20, 30, 45, 60, 90].indexOf(room.settings.nightDuration) + 1) % 5];
+              break;
+            case 'settings_vote':
+              newSettings.voteDuration = [20, 30, 40, 60, 90][([20, 30, 40, 60, 90].indexOf(room.settings.voteDuration) + 1) % 5];
+              break;
+            case 'toggle_ranked':
+              newSettings.isRanked = !room.settings.isRanked;
+              break;
+            default:
+              changed = false;
+          }
+
+          if (changed) {
+            await db.rooms.update(roomCode, { maxPlayers: newMaxPlayers, settings: newSettings });
+            room.maxPlayers = newMaxPlayers;
+            room.settings = newSettings;
+            activeRooms.set(roomCode, room);
+            
+            await bot.editMessageReplyMarkup(
+              roomSettingsMenu(room).reply_markup,
+              { chat_id: msg.chat.id, message_id: msg.message_id }
+            );
+          }
+
+          const settingNames = {
+            'settings_maxplayers': `👥 Макс. игроков: ${newMaxPlayers}`,
+            'settings_day': `☀️ День: ${newSettings.dayDuration}с`,
+            'settings_night': `🌙 Ночь: ${newSettings.nightDuration}с`,
+            'settings_vote': `🗳️ Голосование: ${newSettings.voteDuration}с`,
+            'toggle_ranked': newSettings.isRanked ? '🏆 Рейтинг включён' : '🏆 Рейтинг выключен',
+          };
           await bot.answerCallbackQuery(query.id, {
-            text: result.message || '✅ Игра начинается!',
+            text: settingNames[data] || '✅ Настройка изменена',
             show_alert: true,
           });
           break;

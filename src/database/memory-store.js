@@ -209,6 +209,12 @@ const rooms = {
     return roomsList.map(transformRoomFromDB);
   },
 
+  async findAllWaiting() {
+    const roomsList = Array.from(stores.rooms.values())
+      .filter(r => r.status === 'waiting');
+    return roomsList.map(transformRoomFromDB);
+  },
+
   async isCodeUnique(code) {
     return !stores.rooms.has(code);
   },
