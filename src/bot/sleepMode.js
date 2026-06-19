@@ -13,7 +13,7 @@ const logger = require('../utils/logger').withContext('SleepMode');
 
 const INACTIVITY_TIMEOUT_MS = (config.sleepTimeoutMinutes || 35) * 60 * 1000;
 
-let isSleeping = true; // Начинаем в спящем режиме
+let isSleeping = false; // Начинаем бодрствующим
 let sleepTimer = null;
 let sleepTimerStartedAt = null;
 const wakeUpCallbacks = [];

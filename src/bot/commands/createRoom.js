@@ -71,11 +71,17 @@ const handleCreateRoom = async (bot, msg, options = {}) => {
  * @param {object} query - CallbackQuery от Telegram
  */
 const handleRoomTypeChoice = async (bot, query) => {
-  const chatId = query.message.chat.id;
   const type = query.data === 'room_type_public' ? 'public' : 'private';
 
-  // Создаём комнату с выбранным типом
-  await handleCreateRoom(bot, query.message, { type });
+  // Создаём фейковый msg с правильным from (query.from, а не query.message.from)
+  // query.message.from — это сам бот, query.from — реальный пользователь
+  const fakeMsg = {
+    chat: { id: query.message.chat.id },
+    from: query.from,
+    text: '/create',
+  };
+
+  await handleCreateRoom(bot, fakeMsg, { type });
 
   await bot.answerCallbackQuery(query.id);
 };

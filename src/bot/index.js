@@ -321,21 +321,10 @@ const setupCallbacks = () => {
     const msg = query.message;
     const from = query.from;
 
-    // Если бот спит — игнорируем callback
+    // Если бот спит — будим его и обрабатываем callback
     if (sleepMode.isSleeping) {
-      // Логируем заблокированный callback
-      sleepMode.addLogEntry({
-        action: 'blocked',
-        source: 'callback',
-        user: from || null,
-        details: `Заблокирован: ${data}`,
-      });
-      sleepMode.resetSleepTimer();
-      await bot.answerCallbackQuery(query.id, {
-        text: '😴 Бот спит. Напишите /start чтобы разбудить.',
-        show_alert: true,
-      }).catch(() => {});
-      return;
+      sleepMode.recordActivity(from, 'callback', `Callback: ${data}`);
+      // Больше не блокируем — обрабатываем дальше
     }
 
     // Записываем активность
