@@ -81,4 +81,13 @@ router.get('/server', async (req, res) => {
   }
 });
 
+// ── Sleep mode page ──
+router.get('/sleep', async (req, res) => {
+  try {
+    res.render('sleep', { title: 'Активность бота | MafiaBOT' });
+  } catch (error) {
+    res.status(500).send(`<h1>Ошибка</h1><p>${error.message}</p>`);
+  }
+});
+
 module.exports = router;

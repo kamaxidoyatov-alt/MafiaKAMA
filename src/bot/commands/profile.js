@@ -9,7 +9,7 @@ const logger = require('../../utils/logger').withContext('CmdProfile');
 
 /**
  * Обрабатывает команду просмотра статистики
- * @param {object} bot - Экземпляр бота
+ * @param {object} bot - Экземпляр ботаой 
  * @param {object} msg - Сообщение Telegram
  */
 const handleProfile = async (bot, msg) => {

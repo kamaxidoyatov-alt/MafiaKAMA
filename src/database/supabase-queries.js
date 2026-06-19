@@ -8,6 +8,36 @@
 
 const { getClient } = require('./supabase');
 const logger = require('../utils/logger').withContext('SupabaseQueries');
+const memoryStore = require('./memory-store');
+
+/**
+ * Fallback: пытается выполнить операцию через Supabase,
+ * при ошибке 'table not found' (42P01) переключается на in-memory
+ */
+let useMemoryFallback = false;
+
+function withFallback(supabaseFn, memoryFn, context) {
+  return async (...args) => {
+    if (useMemoryFallback) {
+      return memoryFn(...args);
+    }
+    try {
+      return await supabaseFn(...args);
+    } catch (error) {
+      // 42P01 = relation does not exist (таблица не создана)
+      // PGRST116 = not found
+      if (error?.code === '42P01' || (error?.message && (
+        error.message.includes('relation') && error.message.includes('does not exist') ||
+        error.message.includes('Could not find the table')
+      ))) {
+        useMemoryFallback = true;
+        logger.warn(`⚠️ Таблица Supabase не найдена. Переключаюсь на in-memory хранилище.`);
+        return memoryFn(...args);
+      }
+      throw error;
+    }
+  };
+}
 
 // =============================================
 // USERS
@@ -795,43 +825,190 @@ function transformPlayerStatsToDB(updates) {
   return db;
 }
 
+// =============================================
+// Экспорт с Fallback-обёрткой
+// Каждая функция сначала пробует Supabase,
+// при ошибке "таблица не найдена" переключается на in-memory
+// =============================================
+
 module.exports = {
-  users,
+  users: {
+    findByTelegramId: withFallback(
+      users.findByTelegramId.bind(users),
+      (id) => memoryStore.users.findByTelegramId(id)
+    ),
+    create: withFallback(
+      users.create.bind(users),
+      (data) => memoryStore.users.create(data)
+    ),
+    update: withFallback(
+      users.update.bind(users),
+      (id, data) => memoryStore.users.update(id, data)
+    ),
+    findAll: withFallback(
+      users.findAll.bind(users),
+      (opts) => memoryStore.users.findAll(opts)
+    ),
+    count: withFallback(
+      users.count.bind(users),
+      (filters) => memoryStore.users.count(filters)
+    ),
+    getTopByRating: withFallback(
+      users.getTopByRating.bind(users),
+      (limit) => memoryStore.users.getTopByRating(limit)
+    ),
+    getTopByWins: withFallback(
+      users.getTopByWins.bind(users),
+      (limit) => memoryStore.users.getTopByWins(limit)
+    ),
+    getTopByGames: withFallback(
+      users.getTopByGames.bind(users),
+      (limit) => memoryStore.users.getTopByGames(limit)
+    ),
+  },
   rooms: {
-    ...rooms,
-    // Алиас для совместимости
-    findOne: async (filter) => {
-      if (filter.code) return rooms.findByCode(filter.code);
-      return null;
-    },
-    deleteOne: async (filter) => {
-      if (filter.code) await rooms.delete(filter.code);
-    },
-    find: async (filter = {}) => {
-      if (filter.type === 'public' && filter.status === 'waiting') {
-        return rooms.findPublicWaiting();
+    findByCode: withFallback(
+      (code) => rooms.findByCode(code),
+      (code) => memoryStore.rooms.findByCode(code)
+    ),
+    create: withFallback(
+      rooms.create.bind(rooms),
+      (data) => memoryStore.rooms.create(data)
+    ),
+    update: withFallback(
+      rooms.update.bind(rooms),
+      (code, data) => memoryStore.rooms.update(code, data)
+    ),
+    delete: withFallback(
+      rooms.delete.bind(rooms),
+      (code) => memoryStore.rooms.delete(code)
+    ),
+    findPublicWaiting: withFallback(
+      rooms.findPublicWaiting.bind(rooms),
+      (limit) => memoryStore.rooms.findPublicWaiting(limit)
+    ),
+    findInactive: withFallback(
+      rooms.findInactive.bind(rooms),
+      (mins) => memoryStore.rooms.findInactive(mins)
+    ),
+    isCodeUnique: withFallback(
+      rooms.isCodeUnique.bind(rooms),
+      (code) => memoryStore.rooms.isCodeUnique(code)
+    ),
+    // Алиасы для совместимости
+    findOne: withFallback(
+      async (filter) => {
+        if (filter.code) return rooms.findByCode(filter.code);
+        return null;
+      },
+      async (filter) => {
+        if (filter.code) return memoryStore.rooms.findByCode(filter.code);
+        return null;
       }
-      if (filter.status && filter.status.$ne === 'finished') {
-        return rooms.findInactive(60);
+    ),
+    deleteOne: withFallback(
+      async (filter) => {
+        if (filter.code) await rooms.delete(filter.code);
+      },
+      async (filter) => {
+        if (filter.code) await memoryStore.rooms.delete(filter.code);
       }
-      return [];
-    },
+    ),
+    find: withFallback(
+      async (filter = {}) => {
+        if (filter.type === 'public' && filter.status === 'waiting') {
+          return rooms.findPublicWaiting();
+        }
+        if (filter.status && filter.status.$ne === 'finished') {
+          return rooms.findInactive(60);
+        }
+        return [];
+      },
+      async (filter = {}) => {
+        if (filter.type === 'public' && filter.status === 'waiting') {
+          return memoryStore.rooms.findPublicWaiting();
+        }
+        if (filter.status && filter.status.$ne === 'finished') {
+          return memoryStore.rooms.findInactive(60);
+        }
+        return [];
+      }
+    ),
   },
   games: {
-    ...games,
-    // Алиас для совместимости
-    findOne: async (filter) => {
-      if (filter.gameId) return games.findByGameId(filter.gameId);
-      if (filter.roomCode) {
-        const results = await games.find({ roomCode: filter.roomCode, status: filter.status }, { limit: 1 });
-        return results[0] || null;
+    findByGameId: withFallback(
+      games.findByGameId.bind(games),
+      (id) => memoryStore.games.findByGameId(id)
+    ),
+    create: withFallback(
+      games.create.bind(games),
+      (data) => memoryStore.games.create(data)
+    ),
+    update: withFallback(
+      games.update.bind(games),
+      (id, data) => memoryStore.games.update(id, data)
+    ),
+    count: withFallback(
+      games.count.bind(games),
+      (filters) => memoryStore.games.count(filters)
+    ),
+    // Алиасы для совместимости
+    findOne: withFallback(
+      async (filter) => {
+        if (filter.gameId) return games.findByGameId(filter.gameId);
+        if (filter.roomCode) {
+          const results = await games.find({ roomCode: filter.roomCode, status: filter.status }, { limit: 1 });
+          return results[0] || null;
+        }
+        return null;
+      },
+      async (filter) => {
+        if (filter.gameId) return memoryStore.games.findByGameId(filter.gameId);
+        if (filter.roomCode) {
+          const results = await memoryStore.games.find({ roomCode: filter.roomCode, status: filter.status }, { limit: 1 });
+          return results[0] || null;
+        }
+        return null;
       }
-      return null;
-    },
-    find: async (filter = {}, options = { sort: { createdAt: -1 }, limit: 20 }) => {
-      return games.find(filter, { sortBy: 'created_at', sortDir: 'desc', limit: options.limit || 20 });
-    },
+    ),
+    find: withFallback(
+      async (filter = {}, options = { sort: { createdAt: -1 }, limit: 20 }) => {
+        return games.find(filter, { sortBy: 'created_at', sortDir: 'desc', limit: options.limit || 20 });
+      },
+      async (filter = {}, options = { sort: { createdAt: -1 }, limit: 20 }) => {
+        return memoryStore.games.find(filter, { limit: options.limit || 20 });
+      }
+    ),
   },
-  gameLogs,
-  playerStatsCollection,
+  gameLogs: {
+    create: withFallback(
+      gameLogs.create.bind(gameLogs),
+      (data) => memoryStore.gameLogs.create(data)
+    ),
+    find: withFallback(
+      gameLogs.find.bind(gameLogs),
+      (filters, limit) => memoryStore.gameLogs.find(filters, limit)
+    ),
+    count: withFallback(
+      gameLogs.count.bind(gameLogs),
+      () => memoryStore.gameLogs.count()
+    ),
+  },
+  playerStatsCollection: {
+    findByTelegramId: withFallback(
+      playerStatsCollection.findByTelegramId.bind(playerStatsCollection),
+      (id) => memoryStore.playerStatsCollection.findByTelegramId(id)
+    ),
+    create: withFallback(
+      playerStatsCollection.create.bind(playerStatsCollection),
+      (id) => memoryStore.playerStatsCollection.create(id)
+    ),
+    update: withFallback(
+      playerStatsCollection.update.bind(playerStatsCollection),
+      (id, data) => memoryStore.playerStatsCollection.update(id, data)
+    ),
+  },
 };
+
+// Экспортируем memoryStore для прямого доступа (например, для сброса в тестах)
+module.exports.memoryStore = memoryStore;

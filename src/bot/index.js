@@ -7,6 +7,7 @@ const TelegramBot = require('node-telegram-bot-api');
 const config = require('../config');
 const logger = require('../utils/logger').withContext('Bot');
 const { applyRateLimiter } = require('./middleware/rateLimiter');
+const sleepMode = require('./sleepMode');
 const { mainMenu, adminMenu } = require('./keyboards');
 
 // Команды
@@ -68,6 +69,47 @@ const initBot = async () => {
     { command: 'admin', description: '⚙️ Админ-панель' },
   ]);
 
+  // Получаем информацию о боте (username)
+  try {
+    const me = await bot.getMe();
+    const botUsername = me.username;
+    logger.info(`Бот: @${botUsername}`);
+    
+    // Сохраняем username бота для использования в других частях
+    config.botUsername = botUsername;
+  } catch (err) {
+    logger.warn(`Не удалось получить username бота: ${err.message}`);
+  }
+
+  // Добавляем обработчик новых участников группы
+  bot.on('new_chat_members', async (msg) => {
+    sleepMode.recordActivity(msg.from, 'group_add', 'Бот добавлен в группу');
+    const newMembers = msg.new_chat_members;
+    const botId = (await bot.getMe()).id;
+    
+    for (const member of newMembers) {
+      if (member.id === botId) {
+        // Бота добавили в группу
+        const chat = msg.chat;
+        const chatTitle = chat.title || 'группу';
+        logger.info(`🤖 Бот добавлен в группу: ${chatTitle} (${chat.id})`);
+        
+        const welcomeMessage = `🎭 **Всем привет!** Я — бот для игры в **Мафию**!\n\n` +
+          `Спасибо, что добавили меня в «${chatTitle}»! 🎉\n\n` +
+          `**Чтобы начать игру:**\n` +
+          `1️⃣ Напишите /start — я зарегистрирую всех желающих\n` +
+          `2️⃣ Используйте /create чтобы создать комнату\n` +
+          `3️⃣ Игроки присоединяются через /join \n` +
+          `4️⃣ Когда все готовы — начинайте игру!\n\n` +
+          `📌 **Важно:** все команды работают прямо в группе!\n` +
+          `👤 А в личных сообщениях можно смотреть статистику и рейтинг.`;
+        
+        await bot.sendMessage(chat.id, welcomeMessage, { parse_mode: 'Markdown' });
+        break;
+      }
+    }
+  });
+
   // Обработка ошибок
   bot.on('polling_error', (error) => {
     logger.error(`Polling error: ${error.message}`);
@@ -84,55 +126,112 @@ const initBot = async () => {
 /**
  * Настраивает текстовые команды
  */
+/**
+ * Создаёт RegExp для команды, поддерживая:
+ *  - /command
+ *  - /command@BotUsername
+ *  - /command args
+ *  - /command@BotUsername args
+ */
+function groupCommand(pattern, withArgs = false) {
+  const botName = config.botUsername || '';
+  const botSuffix = botName ? `(?:@${botName})?` : '(?:@\w+)?';
+  if (withArgs) {
+    return new RegExp(`^\\${pattern}${botSuffix}(?:\\s+(.+))?$`);
+  }
+  return new RegExp(`^\\${pattern}${botSuffix}$`);
+}
+
+/**
+ * Обёртка для команд: блокирует выполнение, если бот спит.
+ * Для /start всегда выполняется и будит бота.
+ * @param {Function} handler - (msg, match) => void
+ * @param {boolean} wakeUpCmd - true для /start
+ */
+function sleepGuard(handler, wakeUpCmd = false) {
+  return async (msg, match) => {
+    if (wakeUpCmd) {
+      // /start всегда будит бота и выполняется
+      sleepMode.recordActivity(msg.from, 'command', 'Команда /start');
+      return handler(msg, match);
+    }
+    if (sleepMode.isSleeping) {
+      // Логируем заблокированную команду, но не будим бота
+      sleepMode.addLogEntry({
+        action: 'blocked',
+        source: 'command',
+        user: msg.from || null,
+        details: `Заблокирована: ${msg.text}`,
+      });
+      // Сбрасываем таймер (пользователь активен)
+      sleepMode.resetSleepTimer();
+      try {
+        await bot.sendMessage(msg.chat.id,
+          '😴 **Бот сейчас в спящем режиме.**\n\nНапишите /start, чтобы разбудить меня! 🎭',
+          { parse_mode: 'Markdown' });
+      } catch (e) { /* ignore */ }
+      return;
+    }
+    return handler(msg, match);
+  };
+}
+
 const setupCommands = () => {
-  // /start
-  bot.onText(/^\/start$/, (msg) => handleStart(bot, msg));
+  // /start — всегда выполняется и будит бота
+  bot.onText(groupCommand('/start'), sleepGuard((msg) => handleStart(bot, msg), true));
 
   // /create
-  bot.onText(/^\/create$/, (msg) => handleCreateRoom(bot, msg));
+  bot.onText(groupCommand('/create'), sleepGuard((msg) => handleCreateRoom(bot, msg)));
 
   // /join <code>
-  bot.onText(/^\/join(?:\s+(\w+))?$/, (msg, match) => {
+  bot.onText(groupCommand('/join', true), sleepGuard((msg, match) => {
     handleJoinByCode(bot, msg, match ? match[1] : null);
-  });
+  }));
 
   // /rooms
-  bot.onText(/^\/rooms$/, (msg) => handleFindRoom(bot, msg));
+  bot.onText(groupCommand('/rooms'), sleepGuard((msg) => handleFindRoom(bot, msg)));
 
   // /profile
-  bot.onText(/^\/profile$/, (msg) => handleProfile(bot, msg));
+  bot.onText(groupCommand('/profile'), sleepGuard((msg) => handleProfile(bot, msg)));
 
   // /rating
-  bot.onText(/^\/rating$/, (msg) => handleRating(bot, msg));
+  bot.onText(groupCommand('/rating'), sleepGuard((msg) => handleRating(bot, msg)));
 
   // /rules
-  bot.onText(/^\/rules$/, (msg) => handleRules(bot, msg));
+  bot.onText(groupCommand('/rules'), sleepGuard((msg) => handleRules(bot, msg)));
 
   // /help
-  bot.onText(/^\/help$/, (msg) => handleHelp(bot, msg));
+  bot.onText(groupCommand('/help'), sleepGuard((msg) => handleHelp(bot, msg)));
 
   // /admin
-  bot.onText(/^\/admin$/, (msg) => handleAdmin(bot, msg));
+  bot.onText(groupCommand('/admin'), sleepGuard((msg) => handleAdmin(bot, msg)));
 
   // /ban <id> <reason>
-  bot.onText(/^\/ban\s+(\d+)\s+(.+)$/, (msg, match) => {
-    handleBan(bot, msg, `${match[1]} ${match[2]}`);
-  });
+  bot.onText(groupCommand('/ban', true), sleepGuard((msg, match) => {
+    handleBan(bot, msg, match ? match[1] : '');
+  }));
 
   // /unban <id>
-  bot.onText(/^\/unban\s+(\d+)$/, (msg, match) => {
-    handleUnban(bot, msg, match[1]);
-  });
+  bot.onText(groupCommand('/unban', true), sleepGuard((msg, match) => {
+    handleUnban(bot, msg, match ? match[1] : '');
+  }));
 
   // /delroom <code>
-  bot.onText(/^\/delroom\s+(\w+)$/, (msg, match) => {
-    handleDeleteRoom(bot, msg, match[1]);
-  });
+  bot.onText(groupCommand('/delroom', true), sleepGuard((msg, match) => {
+    handleDeleteRoom(bot, msg, match ? match[1] : '');
+  }));
 
   // Обработка обычных сообщений (чат в лобби)
   bot.on('message', (msg) => {
-    // Игнорируем команды (они обработаны выше)
-    if (msg.text && msg.text.startsWith('/')) return;
+    // Игнорируем служебные сообщения (без текста)
+    if (!msg.text) return;
+
+    // Записываем активность (будит бота и сбрасывает таймер сна)
+    sleepMode.recordActivity(msg.from, 'message', msg.text);
+
+    // Игнорируем команды (они обработаны в setupCommands через sleepGuard)
+    // Но для команд recordActivity уже вызван выше, так что активность записана
+    if (msg.text.startsWith('/')) return;
     // TODO: обработка чата в комнате
   });
 };
@@ -145,6 +244,26 @@ const setupCallbacks = () => {
     const data = query.data;
     const msg = query.message;
     const from = query.from;
+
+    // Если бот спит — игнорируем callback
+    if (sleepMode.isSleeping) {
+      // Логируем заблокированный callback
+      sleepMode.addLogEntry({
+        action: 'blocked',
+        source: 'callback',
+        user: from || null,
+        details: `Заблокирован: ${data}`,
+      });
+      sleepMode.resetSleepTimer();
+      await bot.answerCallbackQuery(query.id, {
+        text: '😴 Бот спит. Напишите /start чтобы разбудить.',
+        show_alert: true,
+      }).catch(() => {});
+      return;
+    }
+
+    // Записываем активность
+    sleepMode.recordActivity(from, 'callback', `Callback: ${data}`);
 
     try {
       switch (true) {

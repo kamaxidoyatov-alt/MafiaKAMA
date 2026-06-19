@@ -8,7 +8,7 @@
  * @param {boolean} isAdmin - Является ли пользователь админом
  * @returns {object} Inline клавиатура
  */
-const mainMenu = (isAdmin = false) => {
+const mainMenu = (isAdmin = false, botUsername = null) => {
   const keyboard = [
     [
       { text: '🎮 Создать комнату', callback_data: 'create_room' },
@@ -23,6 +23,16 @@ const mainMenu = (isAdmin = false) => {
       { text: '❓ Помощь', callback_data: 'help' },
     ],
   ];
+
+  // Кнопка добавления в группу
+  if (botUsername) {
+    keyboard.push([
+      {
+        text: '👥 Добавить в группу',
+        url: `https://t.me/${botUsername}?startgroup=true`,
+      },
+    ]);
+  }
 
   if (isAdmin) {
     keyboard.push([

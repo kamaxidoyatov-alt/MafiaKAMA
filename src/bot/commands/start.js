@@ -59,7 +59,25 @@ const handleStart = async (bot, msg) => {
       user = await db.users.update(from.id, updates);
     }
 
-    // Приветственное сообщение
+    // Определяем, в группе ли мы
+    const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup';
+    
+    if (isGroup) {
+      // В группе — короткое приветствие
+      let groupWelcome = `🎭 **Игра в Мафию!**\n\n`;
+      groupWelcome += `Привет, ${from.first_name}! 🎉\n\n`;
+      groupWelcome += `**Команды в этом чате:**\n`;
+      groupWelcome += `🎮 /create — Создать комнату\n`;
+      groupWelcome += `🔍 /join \`КОД\` — Присоединиться\n`;
+      groupWelcome += `🏠 /rooms — Список комнат\n`;
+      groupWelcome += `\n📌 Для просмотра статистики и профиля пишите мне в личные сообщения!`;
+      
+      await bot.sendMessage(chatId, groupWelcome, { parse_mode: 'Markdown' });
+      return;
+    }
+
+    // Приветственное сообщение (личные сообщения)
+    const botUsername = config.botUsername;
     let welcomeMessage = `🎮 **Добро пожаловать в Мафию!**\n\n`;
     welcomeMessage += `Привет, ${from.first_name}! 🎭\n\n`;
     welcomeMessage += `Это онлайн-версия культовой игры «Мафия».\n`;
@@ -73,12 +91,17 @@ const handleStart = async (bot, msg) => {
     if (user.isAdmin) {
       welcomeMessage += `⚙️ У вас есть права администратора.\n\n`;
     }
+    
+    if (botUsername) {
+      welcomeMessage += `👥 **Хотите играть с друзьями?**\n`;
+      welcomeMessage += `Нажмите на кнопку ниже, чтобы добавить меня в группу! 🎉\n\n`;
+    }
 
     welcomeMessage += `Выберите действие в меню ниже:`;
 
     await bot.sendMessage(chatId, welcomeMessage, {
       parse_mode: 'Markdown',
-      ...mainMenu(user.isAdmin),
+      ...mainMenu(user.isAdmin, config.botUsername),
     });
 
   } catch (error) {

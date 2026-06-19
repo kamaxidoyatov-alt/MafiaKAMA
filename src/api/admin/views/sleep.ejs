@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Активность бота | MafiaBOT</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a14;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border-bottom: 1px solid #2a2a3a;
+            padding: 0 24px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(12px);
+        }
+        .header-inner {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 64px;
+        }
+        .header h1 {
+            font-size: 20px;
+            color: #ffd700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .header h1 i { font-size: 22px; }
+        .nav { display: flex; gap: 4px; }
+        .nav a {
+            color: #888;
+            text-decoration: none;
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .nav a:hover, .nav a.active { color: #ffd700; background: rgba(255, 215, 0, 0.1); }
+        .nav a.active { background: rgba(255, 215, 0, 0.08); }
+
+        .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+        /* Status bar */
+        .status-bar {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px 20px;
+            background: #1a1a2e;
+            border-radius: 12px;
+            border: 1px solid #2a2a3a;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        .status-dot.awake { background: #4ade80; box-shadow: 0 0 12px rgba(74, 222, 128, 0.5); }
+        .status-dot.sleeping { background: #f87171; box-shadow: 0 0 12px rgba(248, 113, 113, 0.5); }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.1); }
+        }
+        .status-label { font-size: 15px; font-weight: 600; }
+        .status-label.awake { color: #4ade80; }
+        .status-label.sleeping { color: #f87171; }
+
+        .status-stat {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #888;
+            font-size: 13px;
+            padding: 4px 12px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 6px;
+        }
+        .status-stat i { width: 16px; text-align: center; }
+        .status-stat strong { color: #ccc; }
+
+        .status-actions { margin-left: auto; display: flex; gap: 8px; }
+        .btn {
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: 1px solid #2a2a3a;
+            background: #1a1a2e;
+            color: #ccc;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn:hover { background: #2a2a3e; border-color: #3a3a4a; color: #fff; }
+        .btn.primary { background: rgba(255, 215, 0, 0.15); border-color: rgba(255, 215, 0, 0.3); color: #ffd700; }
+        .btn.primary:hover { background: rgba(255, 215, 0, 0.25); }
+        .btn.danger { background: rgba(248, 113, 113, 0.1); border-color: rgba(248, 113, 113, 0.2); color: #f87171; }
+        .btn.danger:hover { background: rgba(248, 113, 113, 0.2); }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        /* Filters */
+        .filters {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .filters input, .filters select {
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid #2a2a3a;
+            background: #1a1a2e;
+            color: #ccc;
+            font-size: 13px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .filters input:focus, .filters select:focus { border-color: #ffd700; }
+        .filters input { min-width: 200px; }
+        .filters label { color: #888; font-size: 13px; display: flex; align-items: center; gap: 6px; }
+        .filter-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+        .filter-badge:hover { border-color: #3a3a4a; }
+        .filter-badge.active { background: rgba(255, 215, 0, 0.12); border-color: rgba(255, 215, 0, 0.3); color: #ffd700; }
+
+        /* Table */
+        .table-wrapper {
+            background: #1a1a2e;
+            border-radius: 12px;
+            border: 1px solid #2a2a3a;
+            overflow: hidden;
+        }
+        .table-scroll {
+            overflow-x: auto;
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        th {
+            background: #12121f;
+            padding: 12px 16px;
+            text-align: left;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #666;
+            border-bottom: 1px solid #2a2a3a;
+            white-space: nowrap;
+            cursor: pointer;
+            user-select: none;
+        }
+        th:hover { color: #888; }
+        th i { margin-left: 4px; font-size: 10px; }
+        td {
+            padding: 10px 16px;
+            border-bottom: 1px solid #1e1e30;
+            color: #bbb;
+            vertical-align: middle;
+        }
+        tr:hover td { background: rgba(255,255,255,0.02); }
+
+        /* Action badges */
+        .action-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+        .action-badge.wake { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
+        .action-badge.sleep { background: rgba(248, 113, 113, 0.15); color: #f87171; }
+        .action-badge.activity { background: rgba(96, 165, 250, 0.15); color: #60a5fa; }
+        .action-badge.blocked { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+
+        /* Source badges */
+        .source-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .source-badge.command { background: rgba(167, 139, 250, 0.15); color: #a78bfa; }
+        .source-badge.message { background: rgba(96, 165, 250, 0.15); color: #60a5fa; }
+        .source-badge.callback { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+        .source-badge.group_add { background: rgba(52, 211, 153, 0.15); color: #34d399; }
+        .source-badge.auto { background: rgba(156, 163, 175, 0.15); color: #9ca3af; }
+        .source-badge.unknown { background: rgba(156, 163, 175, 0.1); color: #6b7280; }
+
+        /* User info */
+        .user-cell {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #2a2a3a, #3a3a4a);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 600;
+            color: #ffd700;
+            flex-shrink: 0;
+        }
+        .user-info { min-width: 0; }
+        .user-name {
+            font-weight: 500;
+            color: #e0e0e0;
+            font-size: 13px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .user-meta {
+            font-size: 11px;
+            color: #666;
+        }
+        .user-system {
+            color: #666;
+            font-style: italic;
+            font-size: 13px;
+        }
+
+        /* Time */
+        .time-cell {
+            white-space: nowrap;
+            font-size: 13px;
+        }
+        .time-full { color: #888; font-size: 11px; }
+        .time-ago { color: #bbb; font-weight: 500; }
+
+        .details-cell {
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 13px;
+            color: #999;
+        }
+
+        /* Empty state */
+        .empty-state {
+            padding: 60px 20px;
+            text-align: center;
+            color: #666;
+        }
+        .empty-state i { font-size: 48px; margin-bottom: 16px; opacity: 0.3; }
+        .empty-state p { font-size: 15px; }
+
+        /* Auto-refresh indicator */
+        .refresh-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: #666;
+        }
+        .refresh-indicator .spinner {
+            width: 14px;
+            height: 14px;
+            border: 2px solid #2a2a3a;
+            border-top-color: #ffd700;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header h1 { font-size: 16px; }
+            .header-inner { flex-wrap: wrap; height: auto; padding: 12px 0; gap: 8px; }
+            .nav { flex-wrap: wrap; }
+            .nav a { font-size: 12px; padding: 6px 10px; }
+            .container { padding: 12px; }
+            .status-bar { flex-direction: column; align-items: flex-start; }
+            .status-actions { margin-left: 0; }
+            .filters { flex-direction: column; }
+            .filters input { min-width: 100%; }
+            td, th { padding: 8px 10px; font-size: 12px; }
+            .user-avatar { width: 26px; height: 26px; font-size: 11px; }
+        }
+
+        /* Scrollbar */
+        .table-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+        .table-scroll::-webkit-scrollbar-track { background: transparent; }
+        .table-scroll::-webkit-scrollbar-thumb { background: #2a2a3a; border-radius: 3px; }
+        .table-scroll::-webkit-scrollbar-thumb:hover { background: #3a3a4a; }
+
+        /* Tooltip */
+        [data-tooltip] {
+            position: relative;
+            cursor: help;
+        }
+        [data-tooltip]:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: calc(100% + 6px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: #2a2a3a;
+            color: #ccc;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            white-space: nowrap;
+            z-index: 50;
+            border: 1px solid #3a3a4a;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-inner">
+            <h1><i class="fas fa-moon"></i> Активность бота</h1>
+            <div class="nav">
+                <a href="/admin"><i class="fas fa-chart-bar"></i> Дашборд</a>
+                <a href="/admin/rooms"><i class="fas fa-door-open"></i> Комнаты</a>
+                <a href="/admin/players"><i class="fas fa-users"></i> Игроки</a>
+                <a href="/admin/logs"><i class="fas fa-list"></i> Логи</a>
+                <a href="/admin/sleep" class="active"><i class="fas fa-moon"></i> Сон бота</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Status Bar -->
+        <div class="status-bar" id="statusBar">
+            <div class="status-indicator">
+                <div class="status-dot" id="statusDot"></div>
+                <span class="status-label" id="statusLabel">Загрузка...</span>
+            </div>
+            <div class="status-stat">
+                <i class="fas fa-clock"></i>
+                Таймер сна: <strong id="sleepTimer">--</strong>
+            </div>
+            <div class="status-stat">
+                <i class="fas fa-list"></i>
+                Записей: <strong id="logCount">0</strong>
+            </div>
+            <div class="status-stat refresh-indicator" id="refreshIndicator">
+                <div class="spinner"></div>
+                <span id="refreshText">Обновление...</span>
+            </div>
+            <div class="status-actions">
+                <button class="btn" id="btnRefresh" onclick="fetchLogs()">
+                    <i class="fas fa-sync-alt"></i> Обновить
+                </button>
+                <button class="btn danger" id="btnClear" onclick="clearLogs()">
+                    <i class="fas fa-trash-alt"></i> Очистить лог
+                </button>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="filters">
+            <input type="text" id="searchInput" placeholder="🔍 Поиск по имени, ID или деталям..." oninput="applyFilters()">
+            <select id="actionFilter" onchange="applyFilters()">
+                <option value="all">Все действия</option>
+                <option value="wake">🔵 Пробуждение</option>
+                <option value="sleep">🔴 Засыпание</option>
+                <option value="activity">💬 Активность</option>
+                <option value="blocked">🟡 Заблокировано</option>
+            </select>
+            <select id="sourceFilter" onchange="applyFilters()">
+                <option value="all">Все источники</option>
+                <option value="command">⚡ Команда</option>
+                <option value="message">💬 Сообщение</option>
+                <option value="callback">🔘 Кнопка</option>
+                <option value="group_add">👥 Добавление в группу</option>
+                <option value="auto">🤖 Автоматически</option>
+            </select>
+            <button class="btn" onclick="resetFilters()" style="font-size:12px;padding:6px 12px;">
+                <i class="fas fa-undo"></i> Сброс
+            </button>
+        </div>
+
+        <!-- Table -->
+        <div class="table-wrapper">
+            <div class="table-scroll" id="tableScroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th onclick="sortBy('id')"># <i class="fas fa-sort"></i></th>
+                            <th onclick="sortBy('time')">Время <i class="fas fa-sort"></i></th>
+                            <th onclick="sortBy('action')">Действие <i class="fas fa-sort"></i></th>
+                            <th>Источник</th>
+                            <th onclick="sortBy('user')">Пользователь <i class="fas fa-sort"></i></th>
+                            <th>Детали</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logBody">
+                        <tr>
+                            <td colspan="6">
+                                <div class="empty-state">
+                                    <i class="fas fa-moon"></i>
+                                    <p>Загрузка данных...</p>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ── State ──
+        let allLogs = [];
+        let filteredLogs = [];
+        let sortKey = 'id';
+        let sortDir = 'desc';
+        let refreshInterval = null;
+
+        // ── Icons for actions ──
+        const actionIcons = {
+            wake: '<i class="fas fa-sun"></i>',
+            sleep: '<i class="fas fa-moon"></i>',
+            activity: '<i class="fas fa-comment"></i>',
+            blocked: '<i class="fas fa-ban"></i>',
+        };
+        const actionLabels = {
+            wake: 'Пробуждение',
+            sleep: 'Засыпание',
+            activity: 'Активность',
+            blocked: 'Заблокировано',
+        };
+        const sourceLabels = {
+            command: 'Команда',
+            message: 'Сообщение',
+            callback: 'Кнопка',
+            group_add: 'Группа',
+            auto: 'Авто',
+            unknown: '?',
+        };
+
+        // ── Fetch logs ──
+        async function fetchLogs() {
+            try {
+                const resp = await fetch('/api/sleep/log');
+                const data = await resp.json();
+                allLogs = data.logs || [];
+                updateStatus(data.status);
+                applyFilters();
+            } catch (e) {
+                console.error('Fetch error:', e);
+            }
+        }
+
+        async function fetchStatus() {
+            try {
+                const resp = await fetch('/api/sleep/status');
+                const data = await resp.json();
+                updateStatus(data);
+            } catch (e) {}
+        }
+
+        function updateStatus(status) {
+            if (!status) return;
+            const dot = document.getElementById('statusDot');
+            const label = document.getElementById('statusLabel');
+            const timer = document.getElementById('sleepTimer');
+            const count = document.getElementById('logCount');
+
+            const isAwake = status.isSleeping === false;
+            dot.className = `status-dot ${isAwake ? 'awake' : 'sleeping'}`;
+            label.className = `status-label ${isAwake ? 'awake' : 'sleeping'}`;
+            label.textContent = isAwake ? '🟢 Бот активен' : '🔴 Бот спит';
+
+            if (status.sleepTimerRemaining != null) {
+                const sec = Math.round(status.sleepTimerRemaining / 1000);
+                const m = Math.floor(sec / 60);
+                const s = sec % 60;
+                timer.textContent = `${m}:${s.toString().padStart(2, '0')}`;
+            } else {
+                timer.textContent = '--:--';
+            }
+
+            count.textContent = status.logCount || 0;
+        }
+
+        // ── Apply filters ──
+        function applyFilters() {
+            const search = document.getElementById('searchInput').value.toLowerCase().trim();
+            const actionFilter = document.getElementById('actionFilter').value;
+            const sourceFilter = document.getElementById('sourceFilter').value;
+
+            filteredLogs = allLogs.filter(log => {
+                if (actionFilter !== 'all' && log.action !== actionFilter) return false;
+                if (sourceFilter !== 'all' && log.source !== sourceFilter) return false;
+                if (search) {
+                    const userName = log.user ? (log.user.firstName + ' ' + (log.user.username || '')).toLowerCase() : '';
+                    const details = (log.details || '').toLowerCase();
+                    const userId = log.user ? String(log.user.telegramId) : '';
+                    if (!userName.includes(search) && !details.includes(search) && !userId.includes(search)) return false;
+                }
+                return true;
+            });
+
+            renderTable();
+        }
+
+        function resetFilters() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('actionFilter').value = 'all';
+            document.getElementById('sourceFilter').value = 'all';
+            applyFilters();
+        }
+
+        // ── Sorting ──
+        function sortBy(key) {
+            if (sortKey === key) {
+                sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortKey = key;
+                sortDir = 'desc';
+            }
+            renderTable();
+        }
+
+        // ── Render table ──
+        function renderTable() {
+            const tbody = document.getElementById('logBody');
+
+            // Sort
+            const sorted = [...filteredLogs].sort((a, b) => {
+                let valA, valB;
+                switch (sortKey) {
+                    case 'id': valA = a.id; valB = b.id; break;
+                    case 'time': valA = a.timestamp; valB = b.timestamp; break;
+                    case 'action': valA = a.action; valB = b.action; break;
+                    case 'user': valA = a.user ? a.user.firstName || '' : ''; valB = b.user ? b.user.firstName || '' : ''; break;
+                    default: valA = a.id; valB = b.id;
+                }
+                if (valA < valB) return sortDir === 'asc' ? -1 : 1;
+                if (valA > valB) return sortDir === 'asc' ? 1 : -1;
+                return 0;
+            });
+
+            if (sorted.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6">
+                            <div class="empty-state">
+                                <i class="fas fa-inbox"></i>
+                                <p>Нет записей активности</p>
+                            </div>
+                        </td>
+                    </tr>`;
+                document.getElementById('logCount').textContent = allLogs.length;
+                return;
+            }
+
+            let html = '';
+            for (const log of sorted) {
+                const time = new Date(log.timestamp);
+                const timeStr = time.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                const dateStr = time.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+                const timeAgo = getTimeAgo(time);
+                const actionClass = log.action;
+                const actionHtml = `${actionIcons[log.action] || ''} ${actionLabels[log.action] || log.action}`;
+                const sourceClass = log.source;
+                const sourceHtml = `${sourceLabels[log.source] || log.source}`;
+
+                let userHtml = '<span class="user-system">— система —</span>';
+                if (log.user) {
+                    const initial = (log.user.firstName || '?')[0].toUpperCase();
+                    const name = log.user.firstName || 'Неизвестно';
+                    const username = log.user.username ? `@${log.user.username}` : '';
+                    const uid = log.user.telegramId ? `ID: ${log.user.telegramId}` : '';
+                    userHtml = `
+                        <div class="user-cell">
+                            <div class="user-avatar" data-tooltip="${uid}">${initial}</div>
+                            <div class="user-info">
+                                <div class="user-name">${escapeHtml(name)}</div>
+                                <div class="user-meta">${username}${username && uid ? ' · ' : ''}${uid}</div>
+                            </div>
+                        </div>`;
+                }
+
+                const details = log.details ? escapeHtml(log.details) : '—';
+
+                html += `
+                    <tr>
+                        <td style="color:#666;font-size:12px;">${log.id}</td>
+                        <td class="time-cell">
+                            <div class="time-ago" title="${time.toLocaleString('ru-RU')}">${timeAgo}</div>
+                            <div class="time-full">${dateStr} ${timeStr}</div>
+                        </td>
+                        <td><span class="action-badge ${actionClass}">${actionHtml}</span></td>
+                        <td><span class="source-badge ${sourceClass}">${sourceHtml}</span></td>
+                        <td>${userHtml}</td>
+                        <td class="details-cell" title="${details}">${details}</td>
+                    </tr>`;
+            }
+
+            tbody.innerHTML = html;
+            document.getElementById('logCount').textContent = allLogs.length;
+        }
+
+        // ── Clear logs ──
+        async function clearLogs() {
+            if (!confirm('Очистить весь лог активности?')) return;
+            try {
+                await fetch('/api/sleep/log', { method: 'DELETE' });
+                allLogs = [];
+                applyFilters();
+                fetchStatus();
+            } catch (e) {}
+        }
+
+        // ── Helpers ──
+        function getTimeAgo(date) {
+            const now = Date.now();
+            const diff = now - date.getTime();
+            if (diff < 5000) return 'только что';
+            if (diff < 60000) return `${Math.floor(diff / 1000)}с назад`;
+            if (diff < 3600000) return `${Math.floor(diff / 60000)}м назад`;
+            if (diff < 86400000) return `${Math.floor(diff / 3600000)}ч назад`;
+            return `${Math.floor(diff / 86400000)}д назад`;
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        // ── Auto-refresh ──
+        function startAutoRefresh() {
+            if (refreshInterval) clearInterval(refreshInterval);
+            refreshInterval = setInterval(() => {
+                fetchLogs();
+            }, 5000);
+        }
+
+        // ── Init ──
+        fetchLogs();
+        startAutoRefresh();
+    </script>
+</body>
+</html>

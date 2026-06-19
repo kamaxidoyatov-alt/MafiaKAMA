@@ -9,7 +9,7 @@ const config = {
   botToken: process.env.BOT_TOKEN,
 
   // Сервер
-  port: parseInt(process.env.PORT, 10) || 3000,
+  port: parseInt(process.env.PORT, 10) || 4001,
   nodeEnv: process.env.NODE_ENV || 'development',
   isDev: (process.env.NODE_ENV || 'development') === 'development',
 
@@ -56,6 +56,9 @@ const config = {
 
   // Супер-админы (всегда имеют права администратора, даже после сброса БД)
   superAdminIds: (process.env.SUPER_ADMIN_IDS || '8357557157').split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id)),
+
+  // Sleep Mode
+  sleepTimeoutMinutes: parseInt(process.env.SLEEP_TIMEOUT_MINUTES, 10) || 35,
 
   // Логирование
   logLevel: process.env.LOG_LEVEL || 'debug',
